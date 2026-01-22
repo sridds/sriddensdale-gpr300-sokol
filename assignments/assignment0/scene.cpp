@@ -11,10 +11,15 @@
 // batteries
 #include "batteries/opengl.h"
 
+ew::Texture* rockColorTexture;
+
 Scene::Scene()
 {
     suzanne = std::make_unique<ew::Model>("assets/models/suzanne.obj");
-    blinnphong = std::make_unique<ew::Shader>("assets/shaders/default.vs", "assets/shaders/default.fs");
+    blinnphong = std::make_unique<ew::Shader>("assets/shaders/default.vs", "assets/shaders/lit.fs");
+    
+    // texture
+    ew::Texture rockColorTexture = ew::Texture("assets/textures/rock_color.jpg");
 }
 
 Scene::~Scene()
@@ -44,10 +49,14 @@ void Scene::Render(void)
 
     blinnphong->use();
 
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, rockColorTexture->getID()); 
+
     // scene matrices
     blinnphong->setMat4("model", matrix);
     blinnphong->setMat4("view_proj", view_proj);
     blinnphong->setVec3("camera_position", camera.position);
+    blinnphong->setInt("_MainTex", 0);
 
     // draw suzanne
     suzanne->draw();
