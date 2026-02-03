@@ -12,14 +12,16 @@
 #include "batteries/opengl.h"
 
 ew::Texture* rockColorTexture;
+ew::Texture* gradient;
 
 Scene::Scene()
 {
     suzanne = std::make_unique<ew::Model>("assets/models/suzanne.obj");
-    blinnphong = std::make_unique<ew::Shader>("assets/shaders/default.vs", "assets/shaders/lit.fs");
+    toon = std::make_unique<ew::Shader>("assets/shaders/default.vs", "assets/shaders/windwaker.fs");
     
     // texture
     ew::Texture rockColorTexture = ew::Texture("assets/textures/rock_color.jpg");
+    ew::Texture gradient = ew::Texture("assets/textures/ZAtoon.png");
 }
 
 Scene::~Scene()
@@ -46,18 +48,21 @@ void Scene::Render(void)
     glCullFace(GL_BACK);
     glEnable(GL_DEPTH_TEST);
 
-    auto index = 0;
-    glActiveTexture(GL_TEXTURE0 + index);
-    glBindTexture(GL_TEXTURE_2D, rockColorTexture->getID()); 
+    glActiveTexture(GL_TEXTURE0);
+    glBindTextureUnit(0, rockColorTexture->getID()); 
 
-    blinnphong->use();
-    blinnphong->setInt("texture0", index);
-    
+    glActiveTexture(GL_TEXTURE1);
+    glBindTextureUnit(1, gradient->getID()); 
+
+    toon->use();
+    toon->setInt("texture0", 0);
+    toon->setInt("zatoon", 1);
+
     // scene matrices
-    blinnphong->setMat4("model", matrix);
-    blinnphong->setMat4("view_proj", view_proj);
-    blinnphong->setVec3("camera_position", camera.position);
-    blinnphong->setInt("_MainTex", 0);
+    toon->setMat4("model", matrix);
+    toon->setMat4("view_proj", view_proj);
+    toon->setVec3("camera_position", camera.position);
+    toon->setInt("_MainTex", 0);
 
     // draw suzanne
     suzanne->draw();
