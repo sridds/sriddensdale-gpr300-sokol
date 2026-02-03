@@ -11,13 +11,11 @@
 // batteries
 #include "batteries/opengl.h"
 
-ew::Texture* rockColorTexture;
-
 Scene::Scene()
 {
     suzanne = std::make_unique<ew::Model>("assets/models/suzanne.obj");
-    blinnphong = std::make_unique<ew::Shader>("assets/shaders/default.vs", "assets/shaders/lit.fs");
-    
+    blinnphong = std::make_unique<ew::Shader>("assets/shaders/default.vs", "assets/shaders/default.fs");
+
     // texture
     ew::Texture rockColorTexture = ew::Texture("assets/textures/rock_color.jpg");
 }
@@ -46,17 +44,28 @@ void Scene::Render(void)
     glCullFace(GL_BACK);
     glEnable(GL_DEPTH_TEST);
 
-    auto index = 0;
-    glActiveTexture(GL_TEXTURE0 + index);
+    glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, rockColorTexture->getID()); 
 
     blinnphong->use();
-    blinnphong->setInt("texture0", index);
+    blinnphong->setInt("texture0", 0);
     
     // scene matrices
     blinnphong->setMat4("model", matrix);
     blinnphong->setMat4("view_proj", view_proj);
     blinnphong->setVec3("camera_position", camera.position);
+    
+    blinnphong->setVec3("material.ambient", {0.5f, 0.5f, 0.5f});
+    blinnphong->setVec3("material.diffuse", {0.5f, 0.5f, 0.5f});
+    blinnphong->setVec3("material.specular", {0.5f, 0.5f, 0.5f});
+    blinnphong->setFloat("material.shininess", 1.0f);
+
+    blinnphong->setFloat("ambient.intensity", 1.0f);
+    blinnphong->setVec3("ambient.color", {0.5f, 0.5f, 0.5f});
+
+    blinnphong->setVec3("light.color", {0.5f, 0.5f, 0.5f});
+    blinnphong->setVec3("light.position", {1.0f, 1.0f, 1.0f});
+
     blinnphong->setInt("_MainTex", 0);
 
     // draw suzanne
