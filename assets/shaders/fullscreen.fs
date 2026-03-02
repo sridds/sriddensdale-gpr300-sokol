@@ -1,4 +1,6 @@
-#version 410
+#version 410 core
+
+precision mediump float;
 
 out vec4 FragColor;
 
@@ -10,6 +12,6 @@ uniform sampler2D screen;
 
 void main()
 {
-    vec3 color = texture(screen, vs_texcoord).rgb;
-    FragColor = vec4(color, 1.0);
+  vec3 color = texture(screen, vs_texcoord).rgb;
+  FragColor = vec4(color, 1.0);
 }
