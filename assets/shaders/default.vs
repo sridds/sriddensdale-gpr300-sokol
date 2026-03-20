@@ -8,16 +8,19 @@ layout(location = 2) in vec2 in_texcoord;
 // uniforms
 uniform mat4 view_proj;
 uniform mat4 model;
+uniform mat4 lightSpaceMatrix;
 
 // varyings
 out vec3 vs_position;
 out vec3 vs_normal;
 out vec2 vs_texcoord;
+out vec4 vs_fragLightSpace;
 
 void main()
 {
-  vs_position = in_position;
+  vs_position = vec3(model * vec4(in_position, 1.0));
   vs_normal = transpose(inverse(mat3(model))) * in_normal;
   vs_texcoord = in_texcoord;
-  gl_Position = view_proj * model * vec4(in_position, 1.0);
+  vs_fragLightSpace = lightSpaceMatrix * vec4(vs_position, 1.0);
+  gl_Position = view_proj * model * vec4(vs_position, 1.0);
 }

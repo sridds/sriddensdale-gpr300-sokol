@@ -7,9 +7,11 @@ layout(location = 1) in vec2 in_texcoord;
 // uniforms
 uniform mat4 view_proj;
 uniform mat4 model;
+uniform mat4 lightSpaceMatrix;
 
 // varyings
 out vec2 vs_texcoord;
+out vec4 fragPosLightSpace;
 
 void main()
 {

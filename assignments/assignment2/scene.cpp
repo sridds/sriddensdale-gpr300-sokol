@@ -49,34 +49,36 @@ struct FullscreenQuad{
 };
 
 FullscreenQuad quad;
-
-bool chromaticUsed;
-bool scanlinesUsed;
-bool vignetteUsed;
-bool grayscaleUsed;
-bool invertUsed;
-
-float chromaticAbberationStrength;
-float scanlinesIntensity;
-float scanlinesScale;
-float vignetteStrength;
-float vignetteScale;
+int SCREEN_WIDTH = 800;
+int SCREEN_HEIGHT = 600;
+int SHADOW_RESOLUTION = 1024;
 
 Scene::Scene()
 {
+    // meshes
     suzanne = std::make_unique<ew::Model>("assets/models/suzanne.obj");
-    blinnphong = std::make_unique<ew::Shader>("assets/shaders/default.vs", "assets/shaders/default.fs");
-    // texture
-    
-    rockColorTexture = std::make_unique<ew::Texture>("assets/textures/rock_color.jpg");
-    fullscreen = std::make_unique<ew::Shader>("assets/shaders/fullscreen.vs", "assets/shaders/fullscreen.fs");
-    grayscale = std::make_unique<ew::Shader>("assets/shaders/fullscreen.vs", "assets/shaders/grayscale.fs");
-    chromaticAbberation = std::make_unique<ew::Shader>("assets/shaders/fullscreen.vs", "assets/postprocess/chromaticabberation.fs");
-    invert = std::make_unique<ew::Shader>("assets/shaders/fullscreen.vs", "assets/postprocess/invert.fs");
-    scanlines = std::make_unique<ew::Shader>("assets/shaders/fullscreen.vs", "assets/postprocess/scanlines.fs");
-    vignette = std::make_unique<ew::Shader>("assets/shaders/fullscreen.vs", "assets/postprocess/vignette.fs");
+    plane = ew::Mesh(ew::createPlane(8, 8, 5));
 
+    // shaders
+    blinnphong = std::make_unique<ew::Shader>("assets/shaders/default.vs", "assets/shaders/default.fs");
+    simpleDepthShader = std::make_unique<ew::Shader>("assets/shaders/simpleDepth.vs", "assets/shaders/simpleDepth.fs");
+    fullscreen = std::make_unique<ew::Shader>("assets/shaders/fullscreen.vs", "assets/shaders/fullscreen.fs");
+    
+    // texture
+    rockColorTexture = std::make_unique<ew::Texture>("assets/textures/rock_color.jpg");
+
+    // quad
     quad.Init();
+
+    // initialize light camera
+    lightCam.orthographic = true;
+    lightCam.aspectRatio = 1.0f;
+    lightCam.orthoHeight = 10.0f;
+    lightCam.nearPlane = 0.01f;
+    lightCam.farPlane = 50.0f;
+    lightCam.target = glm::vec3(0.0f);
+
+    // set up frame buffer
     glCreateFramebuffers(1, &fbo);
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
     {
@@ -84,7 +86,7 @@ Scene::Scene()
         glBindTexture(GL_TEXTURE_2D, fboTexture);
 
         // creates an 800 x 600 render texture with 8 bytes (unsigned)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, 800, 600, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
 
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -93,7 +95,7 @@ Scene::Scene()
         // create depth texture
         glGenTextures(1, &fboDepth);
         glBindTexture(GL_TEXTURE_2D, fboDepth);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, 800, 600, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, NULL);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, NULL);
 
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -102,9 +104,28 @@ Scene::Scene()
 
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, fboTexture, 0);
 
+    // set up depth buffer
+    glCreateFramebuffers(1, &depthFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, depthFBO);
+    {
+        // initialize depth texture
+        glGenTextures(1, &depthTexture);
+        glBindTexture(GL_TEXTURE_2D, depthTexture);
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, 1024, 1024, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTexture, 0);
+
+        glDrawBuffer(GL_NONE);
+        glReadBuffer(GL_NONE);
+    }
+
     if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE){
         std::cout << "Framebuffer is not complete" << std::endl;
     }
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 Scene::~Scene()
@@ -123,6 +144,32 @@ auto matrix = glm::mat4(1.0f);
 
 void Scene::Render(void)
 {
+    lightCam.position = glm::vec3(lightPos[0], lightPos[1], lightPos[2]);
+    lightCam.target = glm::vec3(0.0f);
+
+    // shadows
+    glViewport(0, 0, SHADOW_RESOLUTION, SHADOW_RESOLUTION);
+    glBindFramebuffer(GL_FRAMEBUFFER, depthFBO);
+    {
+        // light space matrix
+        lightSpaceMatrix = lightCam.projectionMatrix() * lightCam.viewMatrix();
+
+        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        glClear(GL_DEPTH_BUFFER_BIT);
+
+        simpleDepthShader->use();
+        simpleDepthShader->setMat4("lightSpaceMatrix", lightSpaceMatrix);
+
+        glEnable(GL_DEPTH_TEST);
+        simpleDepthShader->setMat4("model", matrix);
+
+        // render scene
+        suzanne->draw();
+    }
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
     // Suzanne
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
     {
@@ -157,35 +204,24 @@ void Scene::Render(void)
         blinnphong->setVec3("light.color", {0.5f, 0.5f, 0.5f});
         blinnphong->setVec3("light.position", {lightPos[0], lightPos[1], lightPos[2]});
 
-        // draw suzanne
+        blinnphong->setMat4("lightSpaceMatrix", lightSpaceMatrix);
+        blinnphong->setInt("shadowMap", 1);
+
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, depthTexture);
+
+        blinnphong->setMat4("model", matrix);
         suzanne->draw();
+
+        glm::mat4 planeModel = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -1.0f, 0.0f));
+        blinnphong->setMat4("model", planeModel);
+        plane.draw();
     }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     // Post processing
     {
         fullscreen->use();
-
-        if(chromaticUsed){
-            chromaticAbberation->use();
-            chromaticAbberation->setFloat("strength", chromaticAbberationStrength);
-        }
-        if(grayscaleUsed){
-            grayscale->use();
-        }
-        if(vignetteUsed){
-            vignette->use();
-            vignette->setFloat("strength", vignetteStrength);
-            vignette->setFloat("resolution", vignetteScale);
-        }
-        if(invertUsed){
-            invert->use();
-        }
-        if(scanlinesUsed){
-            scanlines->use();
-            scanlines->setFloat("strength", scanlinesIntensity);
-            scanlines->setFloat("resolution", scanlinesScale);
-        }
 
         glDisable(GL_DEPTH_TEST);
 
@@ -223,19 +259,6 @@ void Scene::Debug(void)
 
     ImGui::Begin("Controlls", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
-    ImGui::Checkbox("Chromatic Enabled", &chromaticUsed);
-    ImGui::SliderFloat("Chromatic Strength", &chromaticAbberationStrength, 0, 1);
-
-    ImGui::Checkbox("Vignette Enabled", &vignetteUsed);
-    ImGui::SliderFloat("Vignette Strength", &vignetteStrength, 0, 1);
-    ImGui::SliderFloat("Vignette Scale", &vignetteScale, 0, 1);
-
-    ImGui::Checkbox("Invert Enabled", &invertUsed);
-    ImGui::Checkbox("Grayscale Enabled", &grayscaleUsed);
-    ImGui::Checkbox("Scanlines Enabled", &scanlinesUsed);
-    ImGui::SliderFloat("Scanlines Intensity", &scanlinesIntensity, 0, 1);
-    ImGui::SliderFloat("Scanlines Scale", &scanlinesScale, 0, 1000);
-
     ImGui::Checkbox("Paused", &time.paused);
     ImGui::SliderFloat("Time Factor", &time.factor, 0.0f, 10.0f);
     ImGui::SliderFloat("Ambient", &ambient, 0.0f, 1.0f);
@@ -246,7 +269,7 @@ void Scene::Debug(void)
 
     ImGui::Image((void*)(intptr_t)fboTexture, ImVec2(400, 300), ImVec2(0, 1), ImVec2(1, 0));
     ImGui::Image((void*)(intptr_t)fboDepth, ImVec2(400, 300), ImVec2(0, 1), ImVec2(1, 0));
-
+    ImGui::Image((void*)(intptr_t)depthTexture, ImVec2(400, 300), ImVec2(0, 1), ImVec2(1, 0));
     /* build debug ui here */
 
     ImGui::End();
