@@ -53,11 +53,14 @@ int SCREEN_WIDTH = 800;
 int SCREEN_HEIGHT = 600;
 int SHADOW_RESOLUTION = 1024;
 
+float minBias = 0.005f;
+float maxBias = 0.05f;
+
 Scene::Scene()
 {
     // meshes
     suzanne = std::make_unique<ew::Model>("assets/models/suzanne.obj");
-    plane = ew::Mesh(ew::createPlane(8, 8, 5));
+    plane = ew::Mesh(ew::createPlane(10, 10, 5));
 
     // shaders
     blinnphong = std::make_unique<ew::Shader>("assets/shaders/default.vs", "assets/shaders/default.fs");
@@ -207,6 +210,9 @@ void Scene::Render(void)
         blinnphong->setMat4("lightSpaceMatrix", lightSpaceMatrix);
         blinnphong->setInt("shadowMap", 1);
 
+        blinnphong->setFloat("minBias", minBias);
+        blinnphong->setFloat("maxBias", maxBias);
+
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, depthTexture);
 
@@ -266,6 +272,9 @@ void Scene::Debug(void)
     ImGui::SliderFloat("Specular", &specular, 0.0f, 1.0f);
     ImGui::SliderFloat("Shininess", &shininess, 0.0f, 1.0f);
     ImGui::SliderFloat3("Light Position", &lightPos[0], -5.0f, 5.0f);
+
+    ImGui::SliderFloat("Min Shadow Bias", &minBias, 0.0, 1.0);
+    ImGui::SliderFloat("Max Shadow Bias", &maxBias, 0.0, 1.0);
 
     ImGui::Image((void*)(intptr_t)fboTexture, ImVec2(400, 300), ImVec2(0, 1), ImVec2(1, 0));
     ImGui::Image((void*)(intptr_t)fboDepth, ImVec2(400, 300), ImVec2(0, 1), ImVec2(1, 0));

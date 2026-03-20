@@ -32,6 +32,8 @@ uniform Material material;
 uniform Ambient ambient;
 uniform Light light;
 uniform vec3 camera_position;
+uniform float minBias;
+uniform float maxBias;
 
 float ShadowCalculation(vec4 fragPosLightSpace)
 {
@@ -44,7 +46,7 @@ float ShadowCalculation(vec4 fragPosLightSpace)
 
   vec3 normal = normalize(vs_normal);
   vec3 lightDir = normalize(light.position - vs_position);
-  float bias = max(0.05 * (1.0 - dot(normal, lightDir)), 0.005);
+  float bias = max(maxBias * (1.0 - dot(normal, lightDir)), minBias);
 
   float shadow = 0.0;
   vec2 texelSize = 1.0 / textureSize(shadowMap, 0);
