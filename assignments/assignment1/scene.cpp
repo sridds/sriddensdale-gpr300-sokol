@@ -55,12 +55,23 @@ bool scanlinesUsed;
 bool vignetteUsed;
 bool grayscaleUsed;
 bool invertUsed;
+bool lensDistortionUsed;
+bool filmGrainUsed;
+bool sharpenUsed;
+bool gaussianUsed;
+bool useBoxBlur;
 
-float chromaticAbberationStrength;
-float scanlinesIntensity;
-float scanlinesScale;
-float vignetteStrength;
-float vignetteScale;
+float chromaticAbberationStrength = 0.08f;
+float scanlinesIntensity = 0.6f;
+float scanlinesScale = 150.0f;
+float vignetteStrength = 0.6f;
+float vignetteScale = 0.6f;
+float lensDistortionStrength = 1.0f;
+float filmGrainStrength = 0.5f;
+float filmGrainScale = 50.0f;
+float sharpenStrength = 1.0f;
+float gaussianStrength;
+float boxBlurStrength;
 
 Scene::Scene()
 {
@@ -70,11 +81,16 @@ Scene::Scene()
     
     rockColorTexture = std::make_unique<ew::Texture>("assets/textures/rock_color.jpg");
     fullscreen = std::make_unique<ew::Shader>("assets/shaders/fullscreen.vs", "assets/shaders/fullscreen.fs");
-    grayscale = std::make_unique<ew::Shader>("assets/shaders/fullscreen.vs", "assets/shaders/grayscale.fs");
+    lensDistortion = std::make_unique<ew::Shader>("assets/shaders/fullscreen.vs", "assets/postprocess/lensdistortion.fs");
+    grayscale = std::make_unique<ew::Shader>("assets/shaders/fullscreen.vs", "assets/postprocess/grayscale.fs");
     chromaticAbberation = std::make_unique<ew::Shader>("assets/shaders/fullscreen.vs", "assets/postprocess/chromaticabberation.fs");
     invert = std::make_unique<ew::Shader>("assets/shaders/fullscreen.vs", "assets/postprocess/invert.fs");
     scanlines = std::make_unique<ew::Shader>("assets/shaders/fullscreen.vs", "assets/postprocess/scanlines.fs");
     vignette = std::make_unique<ew::Shader>("assets/shaders/fullscreen.vs", "assets/postprocess/vignette.fs");
+    filmGrain = std::make_unique<ew::Shader>("assets/shaders/fullscreen.vs", "assets/postprocess/filmgrain.fs");
+    sharpen = std::make_unique<ew::Shader>("assets/shaders/fullscreen.vs", "assets/postprocess/sharpen.fs");
+    gaussianBlur = std::make_unique<ew::Shader>("assets/shaders/fullscreen.vs", "assets/postprocess/gaussianblur.fs");
+    boxBlur = std::make_unique<ew::Shader>("assets/shaders/fullscreen.vs", "assets/postprocess/boxblur.fs");
 
     quad.Init();
     glCreateFramebuffers(1, &fbo);
@@ -112,11 +128,14 @@ Scene::~Scene()
     glDeleteFramebuffers(1, &fbo);
 }
 
+float timer = 0.0f;
+
 void Scene::Update(float dt)
 {
     batteries::Scene::Update(dt);
 
     /* body */
+    timer += dt;
 }
 
 auto matrix = glm::mat4(1.0f);
@@ -186,6 +205,32 @@ void Scene::Render(void)
             scanlines->setFloat("strength", scanlinesIntensity);
             scanlines->setFloat("resolution", scanlinesScale);
         }
+        if(lensDistortionUsed){
+            lensDistortion->use();
+            lensDistortion->setFloat("strength", lensDistortionStrength);
+        }
+        if(filmGrainUsed){
+            filmGrain->use();
+            filmGrain->setVec2("resolution", glm::vec2(800, 600));
+            filmGrain->setFloat("time", timer);
+            filmGrain->setFloat("strength", filmGrainStrength);
+            filmGrain->setFloat("scale", filmGrainScale);
+        }
+        if(sharpenUsed){
+            sharpen->use();
+            sharpen->setVec2("resolution", glm::vec2(800, 600));
+            sharpen->setFloat("sharpness", sharpenStrength);
+        }
+        if(gaussianUsed){
+            gaussianBlur->use();
+            gaussianBlur->setVec2("resolution", glm::vec2(800, 600));
+            gaussianBlur->setFloat("strength", gaussianStrength);
+        }
+        if(useBoxBlur){
+            boxBlur->use();
+            boxBlur->setVec2("resolution", glm::vec2(800, 600));
+            boxBlur->setFloat("strength", boxBlurStrength);
+        }
 
         glDisable(GL_DEPTH_TEST);
 
@@ -223,18 +268,61 @@ void Scene::Debug(void)
 
     ImGui::Begin("Controlls", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
-    ImGui::Checkbox("Chromatic Enabled", &chromaticUsed);
-    ImGui::SliderFloat("Chromatic Strength", &chromaticAbberationStrength, 0, 1);
+    if(ImGui::CollapsingHeader("Chromatic Abberation"))
+    {
+        ImGui::Checkbox("Chromatic Enabled", &chromaticUsed);
+        ImGui::SliderFloat("Chromatic Strength", &chromaticAbberationStrength, 0, 1);
+    }
 
-    ImGui::Checkbox("Vignette Enabled", &vignetteUsed);
-    ImGui::SliderFloat("Vignette Strength", &vignetteStrength, 0, 1);
-    ImGui::SliderFloat("Vignette Scale", &vignetteScale, 0, 1);
+    if(ImGui::CollapsingHeader("Vignette"))
+    {
+        ImGui::Checkbox("Vignette Enabled", &vignetteUsed);
+        ImGui::SliderFloat("Vignette Strength", &vignetteStrength, 0, 1);
+        ImGui::SliderFloat("Vignette Scale", &vignetteScale, 0, 1);
+    }
 
-    ImGui::Checkbox("Invert Enabled", &invertUsed);
-    ImGui::Checkbox("Grayscale Enabled", &grayscaleUsed);
-    ImGui::Checkbox("Scanlines Enabled", &scanlinesUsed);
-    ImGui::SliderFloat("Scanlines Intensity", &scanlinesIntensity, 0, 1);
-    ImGui::SliderFloat("Scanlines Scale", &scanlinesScale, 0, 1000);
+    if(ImGui::CollapsingHeader("Basic Color"))
+    {
+        ImGui::Checkbox("Invert Enabled", &invertUsed);
+        ImGui::Checkbox("Grayscale Enabled", &grayscaleUsed);
+    }
+
+    if(ImGui::CollapsingHeader("Scanlines"))
+    {
+        ImGui::Checkbox("Scanlines Enabled", &scanlinesUsed);
+        ImGui::SliderFloat("Scanlines Intensity", &scanlinesIntensity, 0, 1);
+        ImGui::SliderFloat("Scanlines Scale", &scanlinesScale, 0, 1000);
+    }
+
+    if(ImGui::CollapsingHeader("Lens Distortion"))
+    {
+        ImGui::Checkbox("Lens Disortion Enabled", &lensDistortionUsed);
+        ImGui::SliderFloat("Lens Distortion Strength", &lensDistortionStrength, -5.0f, 5.0f);
+    }
+
+    if(ImGui::CollapsingHeader("Film Grain"))
+    {
+        ImGui::Checkbox("Film Grain Enabled", &filmGrainUsed);
+        ImGui::SliderFloat("Film Grain Strength", &filmGrainStrength, 0.0f, 1.0f);
+    }
+
+    if(ImGui::CollapsingHeader("Sharpen"))
+    {
+        ImGui::Checkbox("Sharpen Enabled", &sharpenUsed);
+        ImGui::SliderFloat("Sharpen Strength", &sharpenStrength, 0.0f, 15.0f);
+    }
+
+    if(ImGui::CollapsingHeader("Gaussian Blur"))
+    {
+        ImGui::Checkbox("Gaussian Blur Enabled", &gaussianUsed);
+        ImGui::SliderFloat("Gaussian Blur Strength", &gaussianStrength, 0.0f, 1.0f);
+    }
+
+    if(ImGui::CollapsingHeader("Box Blur"))
+    {
+        ImGui::Checkbox("Box Blur Enabled", &useBoxBlur);
+        ImGui::SliderFloat("Box Blur Strength", &boxBlurStrength, 0.0f, 1.0f);
+    }
 
     ImGui::Checkbox("Paused", &time.paused);
     ImGui::SliderFloat("Time Factor", &time.factor, 0.0f, 10.0f);

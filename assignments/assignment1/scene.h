@@ -27,16 +27,21 @@ class Scene final : public batteries::Scene
     // post processing effects
     std::unique_ptr<ew::Shader> fullscreen;
     std::unique_ptr<ew::Shader> chromaticAbberation;
+    std::unique_ptr<ew::Shader> lensDistortion;
     std::unique_ptr<ew::Shader> grayscale;
     std::unique_ptr<ew::Shader> invert;
     std::unique_ptr<ew::Shader> scanlines;
     std::unique_ptr<ew::Shader> vignette;
+    std::unique_ptr<ew::Shader> filmGrain;
+    std::unique_ptr<ew::Shader> sharpen;
+    std::unique_ptr<ew::Shader> gaussianBlur;
+    std::unique_ptr<ew::Shader> boxBlur;
 
     float ambient = 1.0f;
     float diffuse = 1.0f;
     float specular = 1.0f;
     float shininess = 1.0f;
-    float lightPos[3] = { 0.0f, 0.0f, 0.0f };
+    float lightPos[3] = { 2.0f, 2.0f, 2.0f };
 
     GLuint fbo;
     GLuint fboTexture;
